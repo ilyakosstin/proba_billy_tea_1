@@ -6,6 +6,7 @@ EPSILON = 1e-8
 type point = np.array
 type triangle = tuple[point, point, point]
 
+# Площадь с помощью векторного произведения
 def get_triangle_surface_cross(a: point, b: point, c: point):
     ab = (b - a)
     ac = (c - a)
@@ -16,15 +17,7 @@ def get_triangle_surface_cross(a: point, b: point, c: point):
     # Via cross product
     return 0.5 * np.abs(x1 * y2 - x2 * y1)
 
-def get_triangle_surface_gorner(a: point, b: point, c: point):
-    ab = np.linalg.norm(b - a)
-    ac = np.linalg.norm(c - a)
-    bc = np.linalg.norm(c - b)
-
-    p = (ab + ac + bc) / 2
-
-    return np.sqrt(p * (p - ab) * (p - ac) * (p - bc))
-
+# Расстояние от прямой отрезка до точки
 def distance_point_to_segment(a: point, b: point, c: point):
     ab = np.linalg.norm(b - a)
     ac = np.linalg.norm(c - a)
@@ -33,12 +26,13 @@ def distance_point_to_segment(a: point, b: point, c: point):
     cos_angle = (ac**2 + ab**2 - bc**2) / (2 * ac * ab)
     sin_angle = np.sqrt(max(0, 1 - cos_angle**2))
 
-    # via surface
+    # через площадь
     area = 0.5 * ac * ab * sin_angle
     height = 2 * area / ab
 
     return height
 
+# проверка: точка в треугольнике или нет
 def is_point_in_triangle(triangle: tuple[point, point, point], p: point):
     a, b, c = triangle
 
@@ -68,15 +62,16 @@ class RegularPolygon:
         self.diagonals = [
             (self.vertices[i], self.vertices[j])
             for i in range(n)
-            for j in range(i + 1, n)
-            if j != i + 1 and not (i == 0 and j == n - 1)
+            for j in range(i + 2, n)
+            if (j + 1) % n != i
         ]
 
         self.n = n
         self.radius = radius
 
-    def draw(self):
-        fig, ax = plt.subplots()
+    def draw(self, ax=None):
+        if ax is None:
+            _, ax = plt.subplots()
 
         for a, b in self.diagonals:
             ax.plot([a[0], b[0]], [a[1], b[1]], color='green', linewidth=0.8)
@@ -89,14 +84,15 @@ class RegularPolygon:
 
         ax.set_aspect('equal')
         ax.grid(True)
-        plt.show()
 
+    # Минимальное расстояние от точки до какой-либо стороны
     def closest_distance_from_side(self, point):
         return min(
             distance_point_to_segment(a, b, point)
             for a, b in self.sides
         )
 
+    # Минимальное расстояние от точки до какой-либо диагонали
     def closest_distance_from_diagonal(self, point):
         if not self.diagonals:
             return np.nan
@@ -106,11 +102,11 @@ class RegularPolygon:
             for a, b in self.diagonals
         )
 
+    # Точка лежит внутри многоугольника или нет?
     def is_inner(self, point: point):
         center = np.array((0, 0))
 
-        # iterate through all the triangles that
-        # this regular polygon is built of
+        # строим "доли" из решения
         for i in range(self.n):
             a = self.vertices[i]
             b = self.vertices[(i + 1) % self.n]
@@ -120,6 +116,7 @@ class RegularPolygon:
 
         return False
 
+    # случайная точка внутри
     def random_inner_point(self, n_max_iter=100) -> point:
         # rejection sampling
 
