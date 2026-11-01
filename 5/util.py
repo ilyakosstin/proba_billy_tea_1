@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from collections import deque
 
-
+# Схема Уолкера
 def walkers_scheme(prob_arr):
     n = len(prob_arr)
 
@@ -33,6 +33,9 @@ def walkers_scheme(prob_arr):
     return u_arr, k_arr
 
 
+# Функция для генерации индекса дискретной случайной величины
+# можно дать u,k -- результат работы walkers_scheme
+# а можно просто список вероятностей
 def generate_walkers(u=None, k=None, p=None):
     if p is not None:
         u, k = walkers_scheme(p)
@@ -48,7 +51,8 @@ def generate_walkers(u=None, k=None, p=None):
     else:
         return k[i]
 
-
+# Подсчет эмпирических вероятностей по уже готовому
+# списку сгенерированных значений
 def emperical_probabilities_of_discrete(discrete_list):
     counter = {}
 
@@ -59,6 +63,13 @@ def emperical_probabilities_of_discrete(discrete_list):
         k: v / len(discrete_list) for k, v in counter.items()
     }
 
+# эмпирическая функция распределения
+def build_distr_func(values):
+    def F_generated(x):
+        return sum(1 if v <= x else 0 for v in values) / len(values)
+    return F_generated
+
+# функция для тестирования схемы Уолкера, в блокноте запускается и выводит график
 def test_walkers_scheme(n=10, n_iter=100):
     weights = np.random.uniform(0, 1, size=n)
     weights = weights / weights.sum()
@@ -89,8 +100,8 @@ def test_walkers_scheme(n=10, n_iter=100):
     plt.legend()
     plt.show()
 
-
-def inverse(func, search_range, epsilon=1e-8):
+# Создание обратной функции с помощью бинарного поиска по интервалу
+def inverse(func, search_range, epsilon=1e-10):
     lo, hi = search_range
     def inv(t):
         l, r = lo, hi
@@ -104,29 +115,94 @@ def inverse(func, search_range, epsilon=1e-8):
     return inv
 
 
-def plot_func(func, func_name, param_name, x_range, critical_points,
-              n_side=200, zoom_factor=10, ax=None):
+# утилита для рисования графиков функций
+def plot_function(
+    f,
+    bounds,
+    critical_points=None,
+    ax=None,
+    mu=1e-3,
+    theta=0.1,
+    base_step=0.01,
+    fine_step=0.001, 
+    parameter_name="x",
+    function_name="f",
+    color='royalblue'
+):
+    a, b = bounds
+
+    f = np.vectorize(f)
+
+    if critical_points is None:
+        critical_points = []
+
+    critical_points = np.asarray(critical_points, dtype=float)
+
+    critical_points = critical_points[
+        (critical_points > a) & (critical_points < b)
+    ]
+
+    critical_points = np.sort(critical_points)
+    critical_points = np.unique(critical_points)
+
+    segments = []
+    left = a
+    for c in critical_points:
+        right = c - mu
+        if left < right:
+            segments.append((left, right))
+        left = c + mu
+    
+    if left < b:
+        segments.append((left, b))
+
     if ax is None:
-        _, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(10, 6))
 
-    x_min, x_max = x_range
-    pts = sorted(critical_points)
+    for left, right in segments:
+        x_base = np.arange(left, right, base_step)
+        fine_regions = []
 
-    for cp in pts:
-        if x_min < cp:
-            xs = np.linspace(x_min, cp, n_side * zoom_factor)
-            ys = np.vectorize(func)(xs)
-            ax.plot(xs, ys, label=f"{func_name}" if x_min == x_range[0] else "")
-        y = func(cp)
-        ax.scatter([cp], [y], color='red', zorder=5)
-        x_min = cp
+        for c in critical_points:
+            fine_left = max(left, c - theta)
+            fine_right = min(right, c + theta)
 
-    if x_min < x_max:
-        xs = np.linspace(x_min, x_max, n_side * zoom_factor)
-        ys = np.vectorize(func)(xs)
-        ax.plot(xs, ys)
+            if fine_left < fine_right:
+                fine_x = np.arange(fine_left, fine_right, fine_step)
+                fine_regions.append(fine_x)
 
-    ax.set_xlabel(param_name)
-    ax.set_ylabel(func_name)
+        if fine_regions:
+            x = np.concatenate([x_base] + fine_regions)
+        else:
+            x = x_base
+
+        x = np.unique(x)
+        x = np.append(x, right)
+
+        with np.errstate(all="ignore"):
+            y = np.asarray(f(x), dtype=float)
+
+        if y.ndim == 0:
+            y = np.full(x.shape, y.item())
+
+        valid = np.isfinite(y)
+        indices = np.flatnonzero(valid)
+
+        if len(indices) == 0:
+            continue
+
+        breaks = np.where(np.diff(indices) > 1)[0] + 1
+        groups = np.split(indices, breaks)
+
+        for group in groups:
+            if len(group) > 0:
+                ax.plot(x[group], y[group], color=color)
+
+    ax.set_title(f"Graph of {function_name}({parameter_name})")
+    ax.set_xlabel(parameter_name)
+    ax.set_ylabel(f'{function_name}({parameter_name})')
     ax.grid(True)
 
+    if ax is None:
+        plt.tight_layout()
+        plt.show()
